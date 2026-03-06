@@ -9,6 +9,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
+# ─────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────
+def get_flag(iso_code: str):
+    flags = {
+        "CN": "🇨🇳", "NG": "🇳🇬", "AE": "🇦🇪", "RU": "🇷🇺", "PK": "🇵🇰", 
+        "TR": "🇹🇷", "MX": "🇲🇽", "VN": "🇻🇳", "BR": "🇧🇷", "IN": "🇮🇳",
+        "BE": "🇧🇪", "US": "🇺🇸", "DE": "🇩🇪", "IT": "🇮🇹", "JP": "🇯🇵",
+        "CA": "🇨🇦", "GB": "🇬🇧", "NP": "🇳🇵", "NI": "🇳🇮", "TW": "🇹🇼",
+        "CH": "🇨🇭", "MY": "🇲🇾", "FR": "🇫🇷", "PL": "🇵🇱", "TH": "🇹🇭",
+        "KR": "🇰🇷", "EG": "🇪🇬", "SA": "🇸🇦", "ZA": "🇿🇦", "UA": "🇺🇦",
+        "NO": "🇳🇴", "ES": "🇪🇸", "NL": "🇳🇱", "AU": "🇦🇺"
+    }
+    return flags.get(str(iso_code).upper(), "🌐")
+
 app = FastAPI(title="SmartContainer Risk Engine API")
 
 # Allow CORS for the React frontend
@@ -156,16 +171,12 @@ def get_critical_containers(limit: int = 50):
     
     results = []
     for _, row in crit_df.iterrows():
-        # Mapping origin flags placeholder (simple representation)
-        flags = {"China": "🇨🇳", "Nigeria": "🇳🇬", "UAE": "🇦🇪", "Russia": "🇷🇺", 
-                 "Pakistan": "🇵🇰", "Turkey": "🇹🇷", "Mexico": "🇲🇽", "Vietnam": "🇻🇳",
-                 "Brazil": "🇧🇷", "India": "🇮🇳"}
         country = str(row.get('Origin_Country', 'Unknown'))
         
         results.append({
             "id": str(row['Container_ID']),
             "origin": country,
-            "originFlag": flags.get(country, "🌐"),
+            "originFlag": get_flag(country),
             "destination": str(row.get('Destination_Country', 'Unknown')),
             "hsCode": str(row.get('HS_Code', 'Unknown')),
             "hsDesc": str(row.get('HS_Description', 'Goods')),
@@ -194,10 +205,6 @@ def get_geographic_risk():
     crit_by_orig = merged_proc[merged_proc['Clearance_Status'] == 'Critical'].groupby('Origin_Country').size()
     
     results = []
-    flags = {"China": "🇨🇳", "Nigeria": "🇳🇬", "UAE": "🇦🇪", "Russia": "🇷🇺", 
-             "Pakistan": "🇵🇰", "Turkey": "🇹🇷", "Mexico": "🇲🇽", "Vietnam": "🇻🇳",
-             "Brazil": "🇧🇷", "India": "🇮🇳"}
-             
     for country in top_origins(crit_by_orig, total_by_orig, 10):
         total = int(total_by_orig.get(country, 0))
         crit = int(crit_by_orig.get(country, 0))
@@ -205,7 +212,7 @@ def get_geographic_risk():
         
         results.append({
             "country": country,
-            "flag": flags.get(country, "🌐"),
+            "flag": get_flag(country),
             "pct": round(pct, 1),
             "count": crit
         })
@@ -221,22 +228,33 @@ def top_origins(crit_series, total_series, n=10):
 
 @app.get("/api/containers/trends")
 def get_trends():
-    # Return mock trends for now as calculating real weekly trends 
-    # requires parsed datetime and sufficient timespan in dataset
-    return [
-      { "week": "W1", "critical": 22, "low": 135, "clear": 980 },
-      { "week": "W2", "critical": 28, "low": 142, "clear": 1020 },
-      { "week": "W3", "critical": 18, "low": 128, "clear": 1050 },
-      { "week": "W4", "critical": 35, "low": 155, "clear": 990 },
-      { "week": "W5", "critical": 30, "low": 148, "clear": 1010 },
-      { "week": "W6", "critical": 42, "low": 160, "clear": 970 },
-      { "week": "W7", "critical": 25, "low": 138, "clear": 1040 },
-      { "week": "W8", "critical": 38, "low": 152, "clear": 995 },
-      { "week": "W9", "critical": 20, "low": 130, "clear": 1060 },
-      { "week": "W10", "critical": 32, "low": 145, "clear": 1025 },
-      { "week": "W11", "critical": 27, "low": 140, "clear": 1035 },
-      { "week": "W12", "critical": 31, "low": 147, "clear": 1015 }
-    ]
+    try:
+        if raw_df.empty or preds_df.empty:
+            return []
+            
+        # Join predictions with dates
+        df = preds_df[['Risk_Level']].copy()
+        df['Date'] = pd.to_datetime(raw_df['Declaration_Date'].iloc[:len(df)], errors='coerce')
+        df = df.dropna(subset=['Date'])
+        
+        # Group by week
+        df['Week'] = df['Date'].dt.to_period('W').apply(lambda r: r.start_time)
+        weeks = sorted(df['Week'].unique())[-12:] # Last 12 weeks
+        
+        results = []
+        for i, week in enumerate(weeks):
+            week_df = df[df['Week'] == week]
+            results.append({
+                "week": f"W{i+1}",
+                "date": week.strftime('%Y-%m-%d'),
+                "critical": int((week_df['Risk_Level'] == 'Critical').sum()),
+                "low": int((week_df['Risk_Level'] == 'Low Risk').sum()),
+                "clear": int((week_df['Risk_Level'] == 'Clear').sum() + (week_df['Risk_Level'].isna()).sum())
+            })
+        return results
+    except Exception as e:
+        print(f"Trend error: {e}")
+        return []
 
 @app.get("/api/containers/{container_id}")
 def get_container(container_id: str):
@@ -253,12 +271,14 @@ def get_container(container_id: str):
     
     decl_w = float(raw_row.get('Declared_Weight', 1) or 1)
     meas_w = float(raw_row.get('Measured_Weight', decl_w) or decl_w)
+    country = str(raw_row.get('Origin_Country', 'Unknown'))
     
     return {
         "id": container_id,
         "riskScore": float(row['Risk_Score']),
         "riskLevel": row['Risk_Level'],
-        "origin": str(raw_row.get('Origin_Country', 'Unknown')),
+        "origin": country,
+        "originFlag": get_flag(country),
         "destination": str(raw_row.get('Destination_Country', 'Unknown')),
         "declaredWeight": float(raw_row.get('Declared_Weight', 0)),
         "measuredWeight": meas_w,
