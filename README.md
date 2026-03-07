@@ -40,7 +40,7 @@ This project integrates a beautiful, high-performance React frontend from **Sent
    ```
 3. Start the development server:
    ```bash
-   npm run dev
+   npm run dev -- --port 8081
    ```
    (The server will usually start on `http://localhost:8081`)
 
@@ -51,3 +51,4 @@ This project integrates a beautiful, high-performance React frontend from **Sent
 - **Geographic Risk**: Interactive visualization of global risk distribution.
 - **Live Predictor**: Direct ML model polling for real-time shipment analysis.
 - **Container Lookup**: Detailed SHAP value explanation for every container ID.
+- **System Settings**: Extensive configuration panel for general preferences, risk thresholds, API backend, notifications, and UI appearance.
