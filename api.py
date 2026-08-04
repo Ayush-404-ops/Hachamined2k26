@@ -97,6 +97,23 @@ class PredictRequest(BaseModel):
 # ENDPOINTS
 # ─────────────────────────────────────────────
 
+@app.get("/api/health")
+@app.get("/api/v1/health")
+def get_health():
+    models_ready = xgb_model is not None and iso_model is not None
+    data_ready = not preds_df.empty and not merged_proc.empty
+
+    return {
+        "status": "ok" if models_ready and data_ready else "degraded",
+        "rowsLoaded": int(len(preds_df)),
+        "processedRowsLoaded": int(len(merged_proc)),
+        "models": {
+            "xgboost": xgb_model is not None,
+            "isolationForest": iso_model is not None,
+        },
+        "featureCount": int(len(feature_names)),
+    }
+
 @app.get("/api/overview/stats")
 def get_overview_stats():
     if preds_df.empty:
@@ -214,6 +231,7 @@ def get_shipping_rates():
     return sorted(results, key=lambda x: x['rate'], reverse=True)
 
 @app.get("/api/containers/critical")
+@app.get("/api/v1/containers/critical")
 def get_critical_containers(level: str = "All", search: str = "", limit: int = 50, offset: int = 0):
     if preds_df.empty or merged_proc.empty:
         return []
@@ -453,6 +471,7 @@ def get_trends():
         return []
 
 @app.get("/api/containers/{container_id}")
+@app.get("/api/v1/lookup/{container_id}")
 def get_container(container_id: str):
     if preds_df.empty:
         raise HTTPException(status_code=500, detail="Data not available")
@@ -491,6 +510,7 @@ def get_container(container_id: str):
     }
 
 @app.post("/api/predict")
+@app.post("/api/v1/predict")
 def predict_risk(data: PredictRequest):
     try:
         declW = float(data.declaredWeight) if data.declaredWeight else 0

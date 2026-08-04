@@ -38,10 +38,15 @@ The system leverages advanced tree-based classification and anomaly detection to
 To view interactive Swagger docs, visit `http://localhost:8000/docs`.
 
 ### Key Endpoints:
-- `GET /api/v1/health`: Returns basic model health status, showing if XGBoost and Isolation models are correctly loaded into memory.
-- `GET /api/v1/containers/critical`: Returns a paginated list of all currently flagged containers meeting the "critical" threshold.
-- `POST /api/v1/predict`: Accepts JSON payload of manifesting container data, returning immediate probability distributions for risk level.
-- `GET /api/v1/lookup/{container_id}`: Retrieves deep context (including SHAP/feature importance data) for a specific ID.
+- `GET /api/health`: Returns model/data health, loaded row counts, model readiness, and feature count.
+- `GET /api/overview/stats`: Returns dashboard totals across 54,000 loaded prediction records.
+- `GET /api/containers/critical`: Returns a paginated list of flagged containers by risk level and search term.
+- `GET /api/containers/geographic`: Returns country-level critical-risk concentration.
+- `POST /api/predict`: Accepts manifest-style container data and returns immediate risk probabilities, risk factors, and recommendation text.
+- `GET /api/containers/{container_id}`: Retrieves deep context for a specific container ID.
+- `GET /api/model/performance`: Returns model metrics, confusion matrix, feature importance, and ROC curve data for the reports view.
+
+Versioned compatibility aliases are also exposed for `GET /api/v1/health`, `GET /api/v1/containers/critical`, `POST /api/v1/predict`, and `GET /api/v1/lookup/{container_id}`.
 
 ---
 
